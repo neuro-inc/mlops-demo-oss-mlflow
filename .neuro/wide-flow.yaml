@@ -1,0 +1,30 @@
+kind: batch
+defaults:
+  preset: cpu-small
+  cache:
+    strategy: none
+tasks:
+  - id: download
+    image: ubuntu
+    bash: sleep 3
+
+  - id: preprocess
+    needs: [download]
+    image: ubuntu
+    bash: sleep 3
+
+  - id: hyperparameter_tuning
+    needs: [preprocess]
+    action: ws:.neuro/matrix.yaml
+
+  - id: evaluate
+    needs: [hyperparameter_tuning]
+    image: ubuntu
+    bash: |
+      sleep 3
+      echo ::set-output name=best_acc::0.93
+
+  - id: deploy
+    needs: [evaluate]
+    image: ubuntu
+    bash: sleep 3

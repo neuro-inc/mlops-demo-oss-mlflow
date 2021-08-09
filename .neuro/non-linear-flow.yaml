@@ -1,0 +1,33 @@
+kind: batch
+defaults:
+  preset: cpu-small
+  cache:
+    strategy: none
+  max_parallel: 2
+tasks:
+  - id: id1
+    bash: echo id1
+    image: ubuntu
+
+  - needs: [id1]
+    strategy:
+      matrix:
+        box: [0, 1, 2]
+    bash: echo id1 matrix
+    image: ubuntu
+
+  - id: id2
+    needs: []
+    bash: echo id2
+    image: ubuntu
+
+  - needs: [id2]
+    strategy:
+      matrix:
+        box: [0, 1, 2]
+    bash: echo id2 matrix
+    image: ubuntu
+
+  - id: id3
+    bash: echo id3
+    image: ubuntu

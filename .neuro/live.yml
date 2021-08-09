@@ -1,0 +1,135 @@
+kind: live
+title: mlops-demo-oss-mlflow
+
+defaults:
+  preset: cpu-small
+  life_span: 1d
+
+volumes:
+  data:
+    remote: storage:$[[ flow.project_id ]]/data
+    mount: /project/data
+    local: data
+  code:
+    remote: storage:$[[ flow.project_id ]]/code
+    mount: /project/code
+    local: code
+  config:
+    remote: storage:$[[ flow.project_id ]]/config
+    mount: /project/config
+    local: config
+  results:
+    remote: storage:$[[ flow.project_id ]]/results
+    mount: /project/results
+    local: results
+  project:
+    remote: storage:$[[ flow.project_id ]]
+    mount: /project
+    local: .
+
+images:
+  myimage:
+    ref: image:$[[ flow.project_id ]]:v3
+    dockerfile: $[[ flow.workspace ]]/Dockerfile
+    context: $[[ flow.workspace ]]/
+    build_preset: cpu-small
+
+jobs:
+
+  train:
+    image: $[[ images.myimage.ref ]]
+    detach: False
+    life_span: 10d
+    volumes:
+      - $[[ upload(volumes.data).ref_ro ]]
+      - $[[ upload(volumes.code).ref_ro ]]
+      - $[[ upload(volumes.config).ref_ro ]]
+      - $[[ volumes.results.ref_rw ]]
+    env:
+      EXPOSE_SSH: "yes"
+      PYTHONPATH: $[[ volumes.code.mount ]]
+    params:
+      train_iterations: "10000"
+    bash: |
+        cd $[[ volumes.project.mount ]]
+        python -u $[[ volumes.code.mount ]]/train.py \
+          --dump_dir $[[ volumes.results.mount ]] --data_path $[[ volumes.data.mount ]] --n_iters $[[ params.train_iterations ]]
+  
+  inference:
+    http_port: 8080
+    http_auth: false
+    image: $[[ images.myimage.ref ]]
+    detach: False
+    life_span: 10d
+    volumes:
+      - $[[ upload(volumes.data).ref_ro ]]
+      - $[[ upload(volumes.code).ref_ro ]]
+      - $[[ upload(volumes.config).ref_ro ]]
+      - $[[ volumes.results.ref_rw ]]
+    env:
+      EXPOSE_SSH: "yes"
+      PYTHONPATH: $[[ volumes.code.mount ]]
+    params:
+      train_iterations: "10000"
+    bash: |
+        cd $[[ volumes.project.mount ]]
+        python -u $[[ volumes.code.mount ]]/server.py \
+          --dump_dir $[[ volumes.results.mount ]] --data_path $[[ volumes.data.mount ]] --n_iters $[[ params.train_iterations ]]
+  
+  tensorboard:
+    action: gh:neuro-actions/tensorboard@v1.0.0
+    args:
+      volumes_results_remote: $[[ volumes.results.remote ]]
+
+  filebrowser:
+    action: gh:neuro-actions/filebrowser@v1.0.0
+    args:
+      volumes_project_remote: $[[ volumes.project.remote ]]
+
+  postgres:
+    image: postgres:12.5
+    name: $[[ flow.title ]]-postgres
+    preset: cpu-small
+    http_port: 5432
+    http_auth: False
+    life_span: 30d
+    detach: True
+    volumes:
+      - disk:mlops-demo-oss-dogs-postgres:/var/lib/postgresql/data:rw
+    env:
+      POSTGRES_PASSWORD: password
+      POSTGRES_INITDB_ARGS: ""
+      PGDATA: /var/lib/postgresql/data/pgdata
+
+  mlflow:
+    image: neuromation/mlflow:1.11.0
+    name: $[[ flow.title ]]-mlflow-server
+    preset: cpu-medium
+    http_port: 5000
+    http_auth: False
+    browse: True
+    life_span: 30d
+    detach: True
+    volumes:
+      - storage:${{ flow.flow_id }}/mlruns:/usr/local/share/mlruns
+    cmd: |
+      server --host 0.0.0.0
+        --backend-store-uri=postgresql://postgres:password@${{ inspect_job('postgres').internal_hostname_named }}:5432
+        --default-artifact-root=/usr/local/share/mlruns
+
+  pipeline:
+    name: $[[ flow.title ]]-create-pipeline
+    image: $[[ images.myimage.ref ]]
+    pass_config: True
+    params:
+      mlflow_storage:
+        descr: Storage path, where MLFlow server stores trained model binaries
+      mlflow_uri:
+        descr: MLFlow server URI
+    env:
+      EXPOSE_SSH: "yes"
+      PYTHONPATH: /usr/project
+      PROJECT: /usr/project
+      MLFLOW_STORAGE: ${{ params.mlflow_storage }}
+      MLFLOW_URI: ${{ params.mlflow_uri }}
+      TRAIN_IMAGE_REF: ${{ images.myimage.ref }}
