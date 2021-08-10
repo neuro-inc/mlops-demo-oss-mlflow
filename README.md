@@ -62,4 +62,4 @@ Set up the variables needed to run the loads in your cluster that were provided 
 export MLFLOW_URI=https://demo-oss-names-mlflow-server.jobs.default.org.neu.ro
 ```
 
-neuro-flow run create_pipeline --param mlflow_storage $MLFLOW_STORAGE --param mlflow_uri $MLFLOW_URI
+neuro-flow run experiment --param mlflow_storage $MLFLOW_STORAGE --param mlflow_uri $MLFLOW_URI

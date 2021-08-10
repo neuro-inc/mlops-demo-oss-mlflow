@@ -1,37 +1,12 @@
-import argparse
-import os
 import random
 import torch
+import json
+import glob
+import os
+import string
+import unicodedata
 from pathlib import Path
 
-
-def get_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Train model for Names classification with a Character-Level RNN."
-    )
-    parser.add_argument(
-        "--dump_dir",
-        type=Path, default="../results", help="Dump path."
-    )
-    parser.add_argument(
-        "--experiment_name",
-        type=str,
-        default='Default',
-        help="Experiment name, defaults to job ID."
-    )
-    parser.add_argument(
-        "--data_path",
-        type=Path,
-        default="data",
-        help="Path to folder, where training data is located"
-    )
-    parser.add_argument(
-        "--n_iters",
-        type=int,
-        default=100000,
-        help="Number of iterations to train the model"
-    )
-    return parser.parse_args()
 
 def evaluate(rnn, line_tensor):
     hidden = rnn.initHidden()
@@ -39,19 +14,23 @@ def evaluate(rnn, line_tensor):
         output, hidden = rnn(line_tensor[i], hidden)
     return output
 
+
 def categoryFromOutput(output, categories):
     top_n, top_i = output.topk(1)
     category_i = top_i[0].item()
     return categories[category_i], category_i
 
+
 def letterToIndex(letter, letters):
     return letters.find(letter)
+
 
 def letterToTensor(letter, letters):
     n_letters = len(letters)
     tensor = torch.zeros(1, n_letters)
     tensor[0][letterToIndex(letter, letters)] = 1
     return tensor
+
 
 def lineToTensor(line, letters):
     n_letters = len(letters)
@@ -60,8 +39,10 @@ def lineToTensor(line, letters):
         tensor[li][0][letterToIndex(letter, letters)] = 1
     return tensor
 
+
 def randomChoice(l):
     return l[random.randint(0, len(l) - 1)]
+
 
 def randomTrainingExample(category_lines, categories, letters):
     category = randomChoice(categories)
@@ -69,3 +50,55 @@ def randomTrainingExample(category_lines, categories, letters):
     category_tensor = torch.tensor([categories.index(category)], dtype=torch.long)
     line_tensor = lineToTensor(line, letters)
     return category, line, category_tensor, line_tensor
+
+
+def get_letters():
+    return string.ascii_letters + " .,;'"
+
+
+def get_categories(dirname):
+    categories = []
+    for filename in findFiles(dirname / "names" / "*.txt"):
+        category = os.path.splitext(os.path.basename(filename))[0]
+        categories.append(category)
+    return categories
+
+
+def save_categories(categories, filename='results//categories.txt'):
+    os.makedirs('results', exist_ok=True)
+    f = open(filename, "w")
+    f.write(json.dumps(categories))
+    f.close()
+
+
+def load_categories(filename='results//categories.txt'):
+    f = open(filename, "r")
+    text = json.loads(f.read())
+    print(text)
+    return text
+
+
+def findFiles(path: Path):
+    return glob.glob(str(path))
+
+
+def unicodeToAscii(s, letters):
+    return ''.join(
+        c for c in unicodedata.normalize('NFD', s)
+        if unicodedata.category(c) != 'Mn'
+        and c in letters
+    )
+
+
+def read_lines(filename, letters):
+    lines = open(filename, encoding='utf-8').read().strip().split('\n')
+    return [unicodeToAscii(line, letters) for line in lines]
+
+
+def read_files(dirname, letters):
+    category_lines = {}
+    for filename in findFiles(dirname / "names" / "*.txt"):
+        category = os.path.splitext(os.path.basename(filename))[0]
+        lines = read_lines(filename, letters)
+        category_lines[category] = lines
+    return category_lines

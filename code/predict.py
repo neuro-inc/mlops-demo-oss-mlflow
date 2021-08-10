@@ -1,5 +1,4 @@
 import torch
-import data
 import utils
 import sys
 
@@ -15,9 +14,10 @@ def predict(rnn, input_line, categories, letters, n_predictions=3):
             predictions.append({categories[category_index]: value})
     return predictions
 
+
 def perform(rnn, input_line):
-    letters = data.get_letters()
-    categories = data.load_categories()
+    letters = utils.get_letters()
+    categories = utils.load_categories()
     predictions = predict(rnn, input_line, categories, letters)
     return predictions
 
@@ -28,4 +28,3 @@ if __name__ == '__main__':
       rnn = torch.load('results//model.pt')
       predictions = perform(rnn, input_line)
       print(predictions)
-  

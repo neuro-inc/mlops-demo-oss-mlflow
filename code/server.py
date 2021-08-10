@@ -4,8 +4,9 @@ from sanic import Sanic
 from sanic.response import json
 
 
-app = Sanic("My Hello, world app")
+app = Sanic("n")
 rnn = torch.load('results//model.pt')
+
 
 @app.route('/')
 async def index(request):
@@ -13,9 +14,10 @@ async def index(request):
     predictions = predict.perform(rnn, input_line)
     return json({'predictions': predictions})
 
+
 @app.route('/test')
 async def index(request):
-    return json({'hellow': 'world'})
+    return json({'hello': 'world'})
 
 
 if __name__ == '__main__':

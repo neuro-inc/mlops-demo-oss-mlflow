@@ -1,5 +1,6 @@
-flake8
-mypy
-isort
 black
+isort
+flake8
+mlflow
+mypy
 sanic

@@ -69,12 +69,10 @@ jobs:
     env:
       EXPOSE_SSH: "yes"
       PYTHONPATH: $[[ volumes.code.mount ]]
-    params:
-      train_iterations: "10000"
     bash: |
         cd $[[ volumes.project.mount ]]
         python -u $[[ volumes.code.mount ]]/server.py \
-          --dump_dir $[[ volumes.results.mount ]] --data_path $[[ volumes.data.mount ]] --n_iters $[[ params.train_iterations ]]
+          --dump_dir $[[ volumes.results.mount ]] --data_path $[[ volumes.data.mount ]]
   
   tensorboard:
     action: gh:neuro-actions/tensorboard@v1.0.0
@@ -117,8 +115,8 @@ jobs:
         --backend-store-uri=postgresql://postgres:password@${{ inspect_job('postgres').internal_hostname_named }}:5432
         --default-artifact-root=/usr/local/share/mlruns
 
-  pipeline:
-    name: $[[ flow.title ]]-create-pipeline
+  experiment:
+    name: $[[ flow.title ]]-experiment
     image: $[[ images.myimage.ref ]]
     pass_config: True
     params:
@@ -126,6 +124,11 @@ jobs:
         descr: Storage path, where MLFlow server stores trained model binaries
       mlflow_uri:
         descr: MLFlow server URI
+    volumes:
+      - $[[ upload(volumes.data).ref_ro ]]
+      - $[[ upload(volumes.code).ref_ro ]]
+      - $[[ upload(volumes.config).ref_ro ]]
+      - $[[ volumes.results.ref_rw ]]
     env:
       EXPOSE_SSH: "yes"
       PYTHONPATH: /usr/project
@@ -133,3 +136,6 @@ jobs:
       MLFLOW_STORAGE: ${{ params.mlflow_storage }}
       MLFLOW_URI: ${{ params.mlflow_uri }}
       TRAIN_IMAGE_REF: ${{ images.myimage.ref }}
+    bash: |
+        python -u $[[ volumes.code.mount ]]/train.py \
+          --data_path $[[ volumes.data.mount ]]
