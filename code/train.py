@@ -1,4 +1,5 @@
 import datetime
+import json
 import math
 import mlflow
 import os
@@ -91,27 +92,29 @@ def get_args() -> argparse.Namespace:
 
 
 def main():
-
     args = get_args()
     
-    # 1. Setting the experiemnt name
+    # 1. Set the remote backend uri
+    mlflow.set_tracking_uri(os.environ['MLFLOW_URI'])
+    # 2. Setting the experiemnt name
     mlflow.set_experiment(args.experiment_name)
     
-    # 2. Starting the tracking session
-    mlrun = mlflow.start_run()
+    # 3. Starting the tracking session
+    mlflow.start_run()
 
-    # 3. Initializing experiment layout
-    record_uuid =  str(datetime.datetime.now().timestamp()).replace('.', '')
-    record_path = os.path.join('results', record_uuid)
+    # 4. Initializing experiment layout
+    rec_uuid =  str(datetime.datetime.now().timestamp()).replace('.', '')
+    record_path = os.path.join('results', rec_uuid)
     n_hidden = int(args.n_hidden)
 
-    # 4. Setting the tags
+    # 5. Setting the tags
     mlflow.set_tag('Python', platform.python_version())
     mlflow.set_tag('Machine', platform.machine())
     mlflow.set_tag('Node', platform.node())
     mlflow.set_tag('Platform', platform.platform())
+    mlflow.set_tag('Record', rec_uuid)
 
-    # 5. Logging the parameter
+    # 6. Logging the parameter
     mlflow.log_param(f'n_hidden', n_hidden)
 
     letters = utils.get_letters()
@@ -125,14 +128,30 @@ def main():
     writer = SummaryWriter(log_dir=args.dump_dir / args.experiment_name)
     loss = perform(rnn, category_lines, categories, letters, args.n_iters, writer)
 
-    # 6. Logging the metric
+    # 7. Logging the metric
     mlflow.log_metric('loss', loss)
 
-    # 7. Saving the artefacts
-    model_path = os.path.join(record_path, f'model_{n_hidden}.pt')
-    chart_path = os.path.join(record_path, f'chart_{n_hidden}.png')
-    code_path = os.path.join(record_path, f'code_{n_hidden}')
-    cache_path = os.path.join('code', f'__pycache__')
+    # 8. Saving the artefacts
+    info = {
+        'uuid': rec_uuid,
+        'params': {
+            'n_hidden': n_hidden
+        },
+        'metrics': {
+            'loss': str(loss)
+        },
+        'artifacts': [
+            'model.pt',
+            'chart.png',
+            'code.zip'
+        ]
+    }
+    model_path = os.path.join(record_path, 'model.pt')
+    chart_path = os.path.join(record_path, 'chart.png')
+    code_path = os.path.join(record_path, 'code')
+    code_path_ = os.path.join(record_path, 'code.zip')
+    cache_path = os.path.join('code', '__pycache__')
+    info_path = os.path.join(record_path, 'info.json')
 
     os.makedirs(record_path, exist_ok=True)
     torch.save(rnn, model_path)
@@ -146,9 +165,32 @@ def main():
     )
     shutil.rmtree(cache_path, ignore_errors=True)
     shutil.make_archive(code_path, 'zip', 'code')
+    with open(info_path, "w") as f:
+        json.dump(info, f, indent=4)
 
-    # 8. Terminating tracking session
+    # 9. Logging the artifacts
+    mlflow.log_artifacts(record_path)
+    # mlflow.log_artifact(os.path.join(os.getcwd(), model_path))
+    # mlflow.log_artifact(os.path.join(os.getcwd(), chart_path))
+    # mlflow.log_artifact(os.path.join(os.getcwd(), code_path_))
+    # mlflow.log_artifact(os.path.join(os.getcwd(), info_path))
+    # features = "rooms, zipcode, median_price, school_rating, transport"
+    # data = {"state": "TX", "Available": 25, "Type": "Detached"}
+
+    # # Create couple of artifact files under the directory "data"
+    # os.makedirs("data1", exist_ok=True)
+    # with open("data1/data.json", 'w', encoding='utf-8') as f:
+    #     json.dump(data, f, indent=2)
+    # with open("data1/features.txt", 'w') as f:
+    #     f.write(features)
+
+    # # Write all files in "data" to root artifact_uri/states
+    # mlflow.log_artifacts("data1", artifact_path="states")
+
+    # 10. Terminating tracking session
+    print(f'The record {rec_uuid} was created') 
     mlflow.end_run()
+    
 
 
 if __name__ == '__main__':
