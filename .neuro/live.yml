@@ -22,6 +22,9 @@ volumes:
     remote: storage:$[[ flow.project_id ]]/results
     mount: /project/results
     local: results
+  mlruns:
+    remote: storage:${{ flow.flow_id }}/mlruns
+    mount: /usr/local/share/mlruns
   project:
     remote: storage:$[[ flow.project_id ]]
     mount: /project
@@ -44,7 +47,7 @@ jobs:
     life_span: 30d
     detach: True
     volumes:
-      - disk:mlops-demo-oss-dogs-postgres:/var/lib/postgresql/data:rw
+      - disk:mlops-demo-oss-mlflow-postgres:/var/lib/postgresql/data:rw
     env:
       POSTGRES_PASSWORD: password
       POSTGRES_INITDB_ARGS: ""
@@ -60,11 +63,11 @@ jobs:
     life_span: 30d
     detach: True
     volumes:
-      - storage:${{ flow.flow_id }}/mlruns:/usr/local/share/mlruns
+      - $[[ volumes.mlruns.ref_rw ]]
     cmd: |
       server --host 0.0.0.0
         --backend-store-uri=postgresql://postgres:password@${{ inspect_job('postgres').internal_hostname_named }}:5432
-        --default-artifact-root=/usr/local/share/mlruns
+        --default-artifact-root=$[[ volumes.mlruns.mount ]]
 
   train:
     image: $[[ images.myimage.ref ]]
@@ -82,23 +85,19 @@ jobs:
       - $[[ upload(volumes.code).ref_ro ]]
       - $[[ upload(volumes.config).ref_ro ]]
       - $[[ volumes.results.ref_rw ]]
+      - $[[ volumes.mlruns.ref_rw ]]
     env:
       EXPOSE_SSH: "yes"
       PYTHONPATH: /usr/project
       PROJECT: /usr/project
-      MLFLOW_STORAGE: ${{ params.mlflow_storage }}
-      MLFLOW_URI: ${{ params.mlflow_uri }}
+      MLFLOW_STORAGE: $[[ volumes.mlruns.mount ]]
+      MLFLOW_URI: http://${{ inspect_job('mlflow').internal_hostname_named }}:5000
       TRAIN_IMAGE_REF: ${{ images.myimage.ref }}
     bash: |
         python -u $[[ volumes.code.mount ]]/train.py \
           --data_path $[[ volumes.data.mount ]] \
           --n_hidden ${{ params.n_hidden }}
   
-  tensorboard:
-    action: gh:neuro-actions/tensorboard@v1.0.0
-    args:
-      volumes_results_remote: $[[ volumes.results.remote ]]
-
   filebrowser:
     action: gh:neuro-actions/filebrowser@v1.0.0
     args:

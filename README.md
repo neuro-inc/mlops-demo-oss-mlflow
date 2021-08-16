@@ -86,7 +86,7 @@ postgres:
     life_span: 30d
     detach: True
     volumes:
-      - disk:mlops-demo-oss-dogs-postgres:/var/lib/postgresql/data:rw
+      - disk:mlops-demo-oss-mlflow-postgres:/var/lib/postgresql/data:rw
     env:
       POSTGRES_PASSWORD: password
       POSTGRES_INITDB_ARGS: ""
@@ -96,8 +96,8 @@ postgres:
 Create a persistent disk for Postgresql, export it as an env variable
 Run a Postgresql server:
 ```shell
-neuro disk create 1G --timeout-unused 30d --name mlops-demo-oss-dogs-postgres
-export MLFLOW_STORAGE=mlops-demo-oss-dogs-postgres
+neuro disk create 1G --timeout-unused 30d --name mlops-demo-oss-mlflow-postgres
+export MLFLOW_STORAGE=mlops-demo-oss-mlflow-postgres
 neuro-flow run postgres
 ```
 
@@ -170,10 +170,12 @@ def main():
     
     # 3. Starting the tracking session
     mlflow.start_run()
+    tmp_dir = tempfile.TemporaryDirectory()
 
     # 4. Initializing experiment layout
     rec_uuid =  str(datetime.datetime.now().timestamp()).replace('.', '')
     record_path = os.path.join('results', rec_uuid)
+    record_path_ = os.path.join(mlflow.get_artifact_uri(), rec_uuid)
     n_hidden = int(args.n_hidden)
 
     # 5. Setting the tags
@@ -238,9 +240,10 @@ def main():
         json.dump(info, f, indent=4)
 
     # 9. Logging the artifacts
+    mlflow.pytorch.log_model(rnn, 'model')
     mlflow.log_artifacts(record_path)
-
-    # 10. Terminating tracking session
+    
+    # 10. Terminating the tracking session
     print(f'The record {rec_uuid} was created') 
     mlflow.end_run()
 ```
@@ -249,30 +252,6 @@ def main():
 neuro-flow run train --param mlflow_storage $MLFLOW_STORAGE --param mlflow_uri $MLFLOW_URI --param n_hidden 120
 ```
 
-Look at the tensorboard config
-```yaml
-  tensorboard:
-    action: gh:neuro-actions/tensorboard@v1.0.0
-    args:
-      volumes_results_remote: $[[ volumes.results.remote ]]
-```
-Run the tensorboard to figure out the learning details
-```shell
-    neuro-flow run tensorboard
-```
-
-Look at the filebrowser config
-```yaml
-  filebrowser:
-    action: gh:neuro-actions/filebrowser@v1.0.0
-    args:
-      volumes_project_remote: $[[ volumes.project.remote ]]
-```
-
-Run the filebrowser to detect the artifacts
-```shell
-    neuro-flow run tensorboard
-```
 
 Look at the inference server configs
 ```yaml
@@ -300,6 +279,11 @@ Look at the inference server configs
           --rec_uuid ${{ params.rec_uuid }}
 ```
 
+Run the filebrowser to detect the artifacts
+```shell
+    neuro-flow run filebrowser
+```
+
 Look at the inference server code
 ```python
 args = get_args()
@@ -323,7 +307,6 @@ neuro-flow run server --param rec_uuid 000000000
 ```
 
 Run the load tests
-Run the inference server
 ```shell
     locust -f rnn/test.py --headless -u 10 -r 100 --host https://job-559448e2-2578-458b-83d1-95ba3285c000.jobs.neuro-compute.org.neu.ro
 

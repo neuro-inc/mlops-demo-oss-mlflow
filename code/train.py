@@ -172,12 +172,12 @@ def main():
         json.dump(info, f, indent=4)
 
     # 9. Logging the artifacts
-    # mlflow.log_artifacts(record_path)
+    mlflow.pytorch.log_model(rnn, 'model')
+    mlflow.log_artifacts(record_path)
     
     # 10. Terminating the tracking session
     print(f'The record {rec_uuid} was created') 
     mlflow.end_run()
-    
 
 
 if __name__ == '__main__':
