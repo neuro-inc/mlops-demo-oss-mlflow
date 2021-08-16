@@ -5,6 +5,7 @@ import mlflow
 import os
 import platform
 import shutil
+import tempfile
 import time
 import train
 import torch
@@ -85,7 +86,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument(
         '--n_iters',
         type=int,
-        default=100000,
+        default=100,#0000,
         help='Number of iterations to train the model'
     )
     return parser.parse_args()
@@ -101,10 +102,12 @@ def main():
     
     # 3. Starting the tracking session
     mlflow.start_run()
+    tmp_dir = tempfile.TemporaryDirectory()
 
     # 4. Initializing experiment layout
     rec_uuid =  str(datetime.datetime.now().timestamp()).replace('.', '')
     record_path = os.path.join('results', rec_uuid)
+    record_path_ = os.path.join(mlflow.get_artifact_uri(), rec_uuid)
     n_hidden = int(args.n_hidden)
 
     # 5. Setting the tags
@@ -169,25 +172,9 @@ def main():
         json.dump(info, f, indent=4)
 
     # 9. Logging the artifacts
-    mlflow.log_artifacts(record_path)
-    # mlflow.log_artifact(os.path.join(os.getcwd(), model_path))
-    # mlflow.log_artifact(os.path.join(os.getcwd(), chart_path))
-    # mlflow.log_artifact(os.path.join(os.getcwd(), code_path_))
-    # mlflow.log_artifact(os.path.join(os.getcwd(), info_path))
-    # features = "rooms, zipcode, median_price, school_rating, transport"
-    # data = {"state": "TX", "Available": 25, "Type": "Detached"}
-
-    # # Create couple of artifact files under the directory "data"
-    # os.makedirs("data1", exist_ok=True)
-    # with open("data1/data.json", 'w', encoding='utf-8') as f:
-    #     json.dump(data, f, indent=2)
-    # with open("data1/features.txt", 'w') as f:
-    #     f.write(features)
-
-    # # Write all files in "data" to root artifact_uri/states
-    # mlflow.log_artifacts("data1", artifact_path="states")
-
-    # 10. Terminating tracking session
+    # mlflow.log_artifacts(record_path)
+    
+    # 10. Terminating the tracking session
     print(f'The record {rec_uuid} was created') 
     mlflow.end_run()
     
