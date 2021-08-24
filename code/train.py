@@ -5,7 +5,6 @@ import mlflow
 import os
 import platform
 import shutil
-import tempfile
 import time
 import train
 import torch
@@ -96,18 +95,20 @@ def main():
     args = get_args()
     
     # 1. Set the remote backend uri
+    # mlflow.set_tracking_uri("sqlite://mlflow.db")
+    print("URRIIIII", os.environ['MLFLOW_URI'])
     mlflow.set_tracking_uri(os.environ['MLFLOW_URI'])
+    
     # 2. Setting the experiemnt name
     mlflow.set_experiment(args.experiment_name)
     
     # 3. Starting the tracking session
-    mlflow.start_run()
-    tmp_dir = tempfile.TemporaryDirectory()
+    mlrun = mlflow.start_run()
 
     # 4. Initializing experiment layout
     rec_uuid =  str(datetime.datetime.now().timestamp()).replace('.', '')
-    record_path = os.path.join('results', rec_uuid)
-    record_path_ = os.path.join(mlflow.get_artifact_uri(), rec_uuid)
+    rec_path = os.path.join('results', rec_uuid)
+    rec_path_ = os.path.join(mlflow.get_artifact_uri(), rec_uuid)
     n_hidden = int(args.n_hidden)
 
     # 5. Setting the tags
@@ -149,14 +150,13 @@ def main():
             'code.zip'
         ]
     }
-    model_path = os.path.join(record_path, 'model.pt')
-    chart_path = os.path.join(record_path, 'chart.png')
-    code_path = os.path.join(record_path, 'code')
-    code_path_ = os.path.join(record_path, 'code.zip')
+    model_path = os.path.join(rec_path, 'model.pt')
+    chart_path = os.path.join(rec_path, 'chart.png')
+    code_path = os.path.join(rec_path, 'code')
     cache_path = os.path.join('code', '__pycache__')
-    info_path = os.path.join(record_path, 'info.json')
+    info_path = os.path.join(rec_path, 'info.json')
 
-    os.makedirs(record_path, exist_ok=True)
+    os.makedirs(rec_path, exist_ok=True)
     torch.save(rnn, model_path)
     plot.draw(
         rnn,
@@ -168,12 +168,14 @@ def main():
     )
     shutil.rmtree(cache_path, ignore_errors=True)
     shutil.make_archive(code_path, 'zip', 'code')
-    with open(info_path, "w") as f:
-        json.dump(info, f, indent=4)
+    # mlflow.log_dict(mlrun, info, info_path)
 
     # 9. Logging the artifacts
     mlflow.pytorch.log_model(rnn, 'model')
-    mlflow.log_artifacts(record_path)
+    mlflow.log_artifacts(rec_path)
+    # artifact_uri = mlflow.get_artifact_uri(rec_path)
+    # shutil.copytree(rec_path, artifact_uri)
+    # print('ARTIFACT_URI', artifact_uri)
     
     # 10. Terminating the tracking session
     print(f'The record {rec_uuid} was created') 
