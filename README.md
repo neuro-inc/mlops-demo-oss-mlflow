@@ -14,7 +14,7 @@ See [Help.md](HELP.md) for the detailed Neuro Project Template Reference.
 
 Install and log in the platform
 ```shell
-pip install -U neuro-cli neuro-flow
+pip install -U neuro-cli neuro-flow neuro-extras
 neuro login
 ```
 

@@ -25,9 +25,6 @@ volumes:
   mlruns:
     remote: storage:${{ flow.flow_id }}/mlruns
     mount: /usr/local/share/mlruns
-  sqlite:
-    remote: storage:${{ flow.flow_id }}/sqlite
-    mount: /usr/local/share/sqlite
   project:
     remote: storage:$[[ flow.project_id ]]
     mount: /project
@@ -41,6 +38,12 @@ images:
     build_preset: cpu-large
 
 jobs:
+  mlflow_server:
+    action: gh:neuro-actions/mlflow@v1.17.0
+    args:
+      backend_store_uri: sqlite:///${{ volumes.mlruns.mount }}/mlflow.db
+      default_artifact_root: ${{ volumes.mlruns.mount }}
+      volumes: "${{ to_json( [volumes.mlruns.ref_rw] ) }}"
   mlflow:
     image: neuromation/mlflow:1.11.0
     name: $[[ flow.title ]]-mlflow-server
@@ -52,10 +55,9 @@ jobs:
     detach: True
     volumes:
       - $[[ volumes.mlruns.ref_rw ]]
-      - $[[ volumes.sqlite.ref_rw ]]
     cmd: |
       server --host 0.0.0.0
-        --backend-store-uri=sqlite://$[[ volumes.sqlite.mount ]]/mlflow.db
+        --backend-store-uri=sqlite://$[[ volumes.mlruns.mount ]]/mlflow.db
         --default-artifact-root=$[[ volumes.mlruns.mount ]]
 
   train:
@@ -63,10 +65,6 @@ jobs:
     name: $[[ flow.title ]]-experiment
     pass_config: True
     params:
-      mlflow_storage:
-        descr: Storage path, where MLFlow server stores trained model binaries
-      mlflow_uri:
-        descr: MLFlow server URI
       n_hidden:
         descr: Number of neurons in the hidden layer
     volumes:
@@ -75,20 +73,15 @@ jobs:
       - $[[ upload(volumes.config).ref_ro ]]
       - $[[ volumes.results.ref_rw ]]
       - $[[ volumes.mlruns.ref_rw ]]
-      - $[[ volumes.sqlite.ref_rw ]]
     env:
       EXPOSE_SSH: "yes"
       PYTHONPATH: /usr/project
       PROJECT: /usr/project
-      MLFLOW_STORAGE: $[[ volumes.mlruns.mount ]]
-      MLFLOW_URI: sqlite://$[[ volumes.sqlite.mount ]]/mlflow.db
       TRAIN_IMAGE_REF: ${{ images.myimage.ref }}
     bash: |
-        echo BEGIN
-        ls -al /usr/local/share/sqlite
-        echo END
         python -u $[[ volumes.code.mount ]]/train.py \
           --data_path $[[ volumes.data.mount ]] \
+          --mlflow_uri http://${{ inspect_job('mlflow').internal_hostname_named }}:5000 \
           --n_hidden ${{ params.n_hidden }}
   
   filebrowser:

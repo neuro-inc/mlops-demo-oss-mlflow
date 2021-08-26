@@ -71,6 +71,12 @@ def get_args() -> argparse.Namespace:
         help='Experiment name, defaults to job ID.'
     )
     parser.add_argument(
+        '--mlflow_uri',
+        type=str,
+        default='http//localhost:5000',
+        help='Mlflow URI.'
+    )
+    parser.add_argument(
         '--n_hidden',
         type=str,
         default='128',
@@ -85,7 +91,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument(
         '--n_iters',
         type=int,
-        default=100,#0000,
+        default=10000,
         help='Number of iterations to train the model'
     )
     return parser.parse_args()
@@ -95,20 +101,17 @@ def main():
     args = get_args()
     
     # 1. Set the remote backend uri
-    # mlflow.set_tracking_uri("sqlite://mlflow.db")
-    print("URRIIIII", os.environ['MLFLOW_URI'])
-    mlflow.set_tracking_uri(os.environ['MLFLOW_URI'])
+    mlflow.set_tracking_uri(args.mlflow_uri)
     
     # 2. Setting the experiemnt name
     mlflow.set_experiment(args.experiment_name)
     
     # 3. Starting the tracking session
-    mlrun = mlflow.start_run()
+    mlflow.start_run()
 
     # 4. Initializing experiment layout
     rec_uuid =  str(datetime.datetime.now().timestamp()).replace('.', '')
     rec_path = os.path.join('results', rec_uuid)
-    rec_path_ = os.path.join(mlflow.get_artifact_uri(), rec_uuid)
     n_hidden = int(args.n_hidden)
 
     # 5. Setting the tags
@@ -163,19 +166,17 @@ def main():
         category_lines,
         categories,
         letters,
-        10000,
+        100,
         chart_path
     )
     shutil.rmtree(cache_path, ignore_errors=True)
     shutil.make_archive(code_path, 'zip', 'code')
-    # mlflow.log_dict(mlrun, info, info_path)
+    with open(info_path, 'w') as info_file:
+        json.dump(info, info_file,  indent=4)
 
     # 9. Logging the artifacts
     mlflow.pytorch.log_model(rnn, 'model')
     mlflow.log_artifacts(rec_path)
-    # artifact_uri = mlflow.get_artifact_uri(rec_path)
-    # shutil.copytree(rec_path, artifact_uri)
-    # print('ARTIFACT_URI', artifact_uri)
     
     # 10. Terminating the tracking session
     print(f'The record {rec_uuid} was created') 
