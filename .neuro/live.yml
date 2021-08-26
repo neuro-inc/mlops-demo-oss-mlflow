@@ -38,28 +38,12 @@ images:
     build_preset: cpu-large
 
 jobs:
-  mlflow_server:
+  mlflow:
     action: gh:neuro-actions/mlflow@v1.17.0
     args:
       backend_store_uri: sqlite:///${{ volumes.mlruns.mount }}/mlflow.db
       default_artifact_root: ${{ volumes.mlruns.mount }}
       volumes: "${{ to_json( [volumes.mlruns.ref_rw] ) }}"
-  mlflow:
-    image: neuromation/mlflow:1.11.0
-    name: $[[ flow.title ]]-mlflow-server
-    preset: cpu-medium
-    http_port: 5000
-    http_auth: False
-    browse: True
-    life_span: 30d
-    detach: True
-    volumes:
-      - $[[ volumes.mlruns.ref_rw ]]
-    cmd: |
-      server --host 0.0.0.0
-        --backend-store-uri=sqlite://$[[ volumes.mlruns.mount ]]/mlflow.db
-        --default-artifact-root=$[[ volumes.mlruns.mount ]]
-
   train:
     image: $[[ images.myimage.ref ]]
     name: $[[ flow.title ]]-experiment
@@ -83,31 +67,4 @@ jobs:
           --data_path $[[ volumes.data.mount ]] \
           --mlflow_uri http://${{ inspect_job('mlflow').internal_hostname_named }}:5000 \
           --n_hidden ${{ params.n_hidden }}
-  
-  filebrowser:
-    action: gh:neuro-actions/filebrowser@v1.0.0
-    args:
-      volumes_project_remote: $[[ volumes.project.remote ]]
-
-  server:
-    http_port: 8080
-    http_auth: false
-    image: $[[ images.myimage.ref ]]
-    detach: False
-    life_span: 10d
-    params:
-      rec_uuid:
-        descr: Uuid of the record to be inferenced with
-    volumes:
-      - $[[ upload(volumes.data).ref_ro ]]
-      - $[[ upload(volumes.code).ref_ro ]]
-      - $[[ upload(volumes.config).ref_ro ]]
-      - $[[ volumes.results.ref_rw ]]
-    env:
-      EXPOSE_SSH: "yes"
-      PYTHONPATH: $[[ volumes.code.mount ]]
-    bash: |
-        python -u $[[ volumes.code.mount ]]/server.py \
-          --data_path $[[ volumes.data.mount ]] \
-          --dump_dir $[[ volumes.results.mount ]] \
-          --rec_uuid ${{ params.rec_uuid }}
+          

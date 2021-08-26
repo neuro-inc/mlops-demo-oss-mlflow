@@ -53,7 +53,8 @@ def perform(rnn, category_lines, categories, letters, n_iters, writer):
             guess, _ = utils.categoryFromOutput(output, categories)
             correct = '✓' if guess == category else '✗ (%s)' % category
             print('%d %d%% (%s) %.4f %s / %s %s' % (iter, iter / n_iters * 100, timeSince(start), loss, line, guess, correct))
-    return current_loss / n_iters
+            mlflow.log_metric('loss', loss)
+    return current_loss
 
 
 def get_args() -> argparse.Namespace:
@@ -133,10 +134,9 @@ def main():
     utils.save_categories(categories)
     rnn = model.RNN(n_letters, n_hidden, n_categories)
     writer = SummaryWriter(log_dir=args.dump_dir / args.experiment_name)
-    loss = perform(rnn, category_lines, categories, letters, args.n_iters, writer)
 
     # 7. Logging the metric
-    mlflow.log_metric('loss', loss)
+    loss = perform(rnn, category_lines, categories, letters, args.n_iters, writer)
 
     # 8. Saving the artefacts
     info = {
@@ -145,7 +145,7 @@ def main():
             'n_hidden': n_hidden
         },
         'metrics': {
-            'loss': str(loss)
+            'cumulative_loss': str(loss)
         },
         'artifacts': [
             'model.pt',
