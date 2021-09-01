@@ -120,6 +120,7 @@ def main():
     mlflow.end_run()
 ```
 
+After configuring and finishing the code you can run the project using the following code
 ```shell
 pip install -U neuro-cli neuro-flow neuro-extras
 neuro login
