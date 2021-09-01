@@ -10,8 +10,6 @@ import train
 import torch
 import torch.nn as nn
 import utils
-from torch.utils.tensorboard import SummaryWriter
-from mlflow.entities import Param, Metric
 import argparse
 from pathlib import Path
 
@@ -40,7 +38,7 @@ def timeSince(since):
     return '%dm %ds' % (m, s)
 
 
-def perform(rnn, category_lines, categories, letters, n_iters, writer):
+def iterate(rnn, category_lines, categories, letters, n_iters):
     print_every=int(n_iters * 0.05)
     current_loss = 0
     start = time.time()
@@ -48,7 +46,6 @@ def perform(rnn, category_lines, categories, letters, n_iters, writer):
         category, line, category_tensor, line_tensor = utils.randomTrainingExample(category_lines, categories, letters)
         output, loss = train(rnn, category_tensor, line_tensor)
         current_loss += loss
-        writer.add_scalar(f'training/loss', loss, global_step=iter)
         if iter % print_every == 0:
             guess, _ = utils.categoryFromOutput(output, categories)
             correct = '✓' if guess == category else '✗ (%s)' % category
@@ -101,28 +98,28 @@ def get_args() -> argparse.Namespace:
 def main():
     args = get_args()
     
-    # 1. Set the remote backend uri
+    # Setting the remote backend uri
     mlflow.set_tracking_uri(args.mlflow_uri)
     
-    # 2. Setting the experiemnt name
+    # Setting the experiemnt name
     mlflow.set_experiment(args.experiment_name)
     
-    # 3. Starting the tracking session
+    # Starting the tracking session
     mlflow.start_run()
 
-    # 4. Initializing experiment layout
+    # Initializing experiment layout
     rec_uuid =  str(datetime.datetime.now().timestamp()).replace('.', '')
     rec_path = os.path.join('results', rec_uuid)
     n_hidden = int(args.n_hidden)
 
-    # 5. Setting the tags
+    # Setting the tags
     mlflow.set_tag('Python', platform.python_version())
     mlflow.set_tag('Machine', platform.machine())
     mlflow.set_tag('Node', platform.node())
     mlflow.set_tag('Platform', platform.platform())
     mlflow.set_tag('Record', rec_uuid)
 
-    # 6. Logging the parameter
+    # Logging the parameter
     mlflow.log_param(f'n_hidden', n_hidden)
 
     letters = utils.get_letters()
@@ -133,12 +130,11 @@ def main():
 
     utils.save_categories(categories)
     rnn = model.RNN(n_letters, n_hidden, n_categories)
-    writer = SummaryWriter(log_dir=args.dump_dir / args.experiment_name)
 
-    # 7. Logging the metric
-    loss = perform(rnn, category_lines, categories, letters, args.n_iters, writer)
+    # Logging the metric
+    loss = iterate(rnn, category_lines, categories, letters, args.n_iters)
 
-    # 8. Saving the artefacts
+    # Saving the artefacts
     info = {
         'uuid': rec_uuid,
         'params': {
@@ -174,11 +170,11 @@ def main():
     with open(info_path, 'w') as info_file:
         json.dump(info, info_file,  indent=4)
 
-    # 9. Logging the artifacts
+    # Logging the artifacts
     mlflow.pytorch.log_model(rnn, 'model')
     mlflow.log_artifacts(rec_path)
     
-    # 10. Terminating the tracking session
+    # Terminating the tracking session
     print(f'The record {rec_uuid} was created') 
     mlflow.end_run()
 
